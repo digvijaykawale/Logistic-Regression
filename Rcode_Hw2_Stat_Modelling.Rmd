@@ -1,0 +1,670 @@
+---
+title: "Study of Logistic Regression"
+author: "Digvijay Kawale"
+date: "2/4/2020"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+# Project Part 2: Study of Logistic Regression 
+
+## Loading the required Packages 
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(corrr)
+library(MASS)
+library(psych)
+```
+
+
+
+## Step 0: Getting the cleaned data set from steps 1 to 9 of Project Part 1.  
+
+* The final data set that we used for the study of linear regression had 832 observations of 8 variables. The same data set is obtained using the steps followed in the project part 1.Those steps are outlined as comments in the below code part. 
+
+```{r}
+
+## Loading Data Sets
+
+Flights_800 <- read_xls("~/Desktop/Subjects/Flex 3/Statistical Modelling/WeeK 1/FAA1-1.xls")
+Flights_150 <- read_xls("~/Desktop/Subjects/Flex 3/Statistical Modelling/WeeK 1/FAA2-1.xls")
+
+## Merging Two Data Sets and removing duplicates
+
+Flights_150$duration <- NA
+
+flights_final <- rbind(Flights_800, Flights_150)
+
+flights_columns <- flights_final[c("aircraft"   ,  "no_pasg"   ,   "speed_ground" ,"speed_air"   , "height"   ,    "pitch"   , "distance"  )]
+
+flights_final <- flights_final[!duplicated(flights_columns),]
+
+## Removing abnormal observations from the data set 
+
+flights_final <- filter(flights_final, ifelse(is.na(height), TRUE, height >= 6))
+
+flights_final <- filter(flights_final, ifelse(is.na(speed_ground), TRUE, (speed_ground >= 30 & speed_ground <= 140)))
+
+flights_final <- filter(flights_final, ifelse(is.na(speed_air), TRUE, (speed_air >= 30 & speed_air <= 140)))
+
+flights_final <- filter(flights_final, ifelse(is.na(duration), TRUE, duration >= 40 ))
+
+dim(flights_final)
+
+
+```
+
+# Creating Binary Responses
+
+## Step 1: Cretaing the Binary Variables 'long_landing', 'risky_landing' and removing the continous variable for 'distance'. 
+
+* A binary response of long landing is created based on the varible distance. If the distance is greater than 2500 then variable long landing will be 1 else it will be 0.
+
+* A binary response of risky landing is created based on the varible distance. If the distance is greater than 3000 then variable risky landing will be 1 else it will be 0.
+
+```{r}
+
+## Adding Binary Variables 
+
+flights_final$long_landing <- ifelse(flights_final$distance > 2500, 1, 0)
+
+flights_final$risky_landing <- ifelse(flights_final$distance > 3000, 1, 0)
+
+## Discarding the Continous variable 'distance'
+
+flights_final$distance <- NULL
+
+```
+
+# Identifying important factors using the binary data of “long_landing”
+
+## Step 2: Histogram showing the distribution of long_landing 
+
+* It is observed that 104 observations of long_landing have the value 1 and the rest 728 have the value 0. 
+
+```{r}
+hist(flights_final$long_landing)
+
+```
+
+## Step 3: Fitting single-factor logistic regression
+
+* The variable Long Landing is logistically regressed with all the variables one by one. 
+
+* Later the results of all the regression models are tabulated in table 1 that contains the size regression coefficient, direction of coeficient, odds ratio and p values. 
+
+* Using p- values from the table 1, it is observed that the significant predictor variables are speed_air, speed_ground, pitch and aircraft_num. 
+
+```{r}
+
+## Converting the variable 'aircraft' into binary 
+
+flights_final$aircraft_num <-  ifelse(flights_final$aircraft == "airbus", 1, 0)
+
+## Fitting single-factor logistic regression using each variable 
+
+duration <-  glm(long_landing ~ duration, family = binomial, data = flights_final)
+no_pasg <- glm(long_landing ~ no_pasg, family = binomial, data = flights_final)
+speed_ground <- glm(long_landing ~ speed_ground, family = binomial, data = flights_final)
+speed_air <- glm(long_landing ~ speed_air, family = binomial, data = flights_final)
+height <- glm(long_landing ~ height, family = binomial, data = flights_final)
+pitch <- glm(long_landing ~ pitch, family = binomial, data = flights_final)
+aircraft_num <- glm(long_landing ~ aircraft_num, family = binomial, data = flights_final)
+
+
+##Calculating odds ratio 
+
+odds_ratio <- c(
+exp(summary(duration)$coefficients[2,1]),
+exp(summary(no_pasg)$coefficients[2,1]),
+exp(summary(speed_ground)$coefficients[2,1]),
+exp(summary(speed_air)$coefficients[2,1]),
+exp(summary(height)$coefficients[2,1]),
+exp(summary(pitch)$coefficients[2,1]),
+exp(summary(aircraft_num)$coefficients[2,1]))
+
+
+## Creating Variable names vector 
+
+variable_names <- c("duration", "no_pasg", "speed_ground", "speed_air",  "height", "pitch", "aircraft_num")
+
+
+## P values 
+
+p_values <- c(
+summary(duration)$coefficients[2,4],
+summary(no_pasg)$coefficients[2,4],
+summary(speed_ground)$coefficients[2,4],
+summary(speed_air)$coefficients[2,4],
+summary(height)$coefficients[2,4],
+summary(pitch)$coefficients[2,4],
+summary(aircraft_num)$coefficients[2,4])
+
+## Regression Coefficients 
+
+regression_coefficients <- c(
+summary(duration)$coefficients[2,1],
+summary(no_pasg)$coefficients[2,1],
+summary(speed_ground)$coefficients[2,1],
+summary(speed_air)$coefficients[2,1],
+summary(height)$coefficients[2,1],
+summary(pitch)$coefficients[2,1],
+summary(aircraft_num)$coefficients[2,1])
+
+Table_1 <- data.frame(variable_names, regression_coefficients, odds_ratio, coef_direction = ifelse(regression_coefficients < 0, "Negative", "Positive") , p_values)
+
+Table_1
+
+```
+
+
+## Step 4 : Seeing the association of long landing
+
+* The significance of variables is checked using the p values. The models having p-values less than 0.05 are considered as significant. 
+
+* The significant predictor variables observed in table_1 are speed_air, speed_ground, pitch and aircraft_num. 
+
+```{r}
+##Speed_air
+
+plot(jitter(long_landing,0.1) ~ jitter(speed_air), flights_final, xlab = "Flight Speed Air", ylab = "Long Landing", pch = ".")
+
+```
+
+```{r}
+##Speed_ground
+
+plot(jitter(long_landing,0.1) ~ jitter(speed_ground), flights_final, xlab = "Flight Speed Ground", ylab = "Long Landing", pch = ".")
+```
+
+```{r}
+##Pitch
+
+plot(jitter(long_landing,0.1) ~ jitter(pitch), flights_final, xlab = "Pitch", ylab = "Long Landing", pch = ".")
+```
+
+```{r}
+##Aircraft Numeric
+
+plot(jitter(long_landing,0.1) ~ jitter(aircraft_num), flights_final, xlab = "Aircraft Type", ylab = "Long Landing", pch = ".")
+```
+
+## Step 5: Fitting the data with all variables together 
+
+* It ws observed in step 16 of Project part 1 that the speed air and speed ground were highly collinear. We used speed ground as predictor because the number of NA's in data were high for speed air. Also, speed ground was more significant than speeed air.
+
+* We will now fit a logistic regression using three variables together. The varibles that we will use are speed_ground, pitch and aircraft numeric. 
+
+* The full model logistetic regression model tells us that wih a unit increase in Speed Ground the odds ratio will increase by 1.849 when all other variables are kept constant. 
+
+* The full model logistetic regression model tells us that wih a unit increase in Pitch the odds ratio will increase by 2.9 when all other variables are kept constant.
+
+* The full model logistetic regression model tells us that wih a unit increase in Aircraft Numeric the odds ratio will increase by 0.047 when all other variables are kept constant.
+
+
+```{r}
+full_model <-  glm(long_landing ~ speed_ground + pitch + aircraft_num, family = binomial, data = flights_final)
+
+## Calculating odds ratio 
+
+odds_ratio_full_model <- c(
+exp(summary(full_model)$coefficients[2,1]),
+exp(summary(full_model)$coefficients[3,1]),
+exp(summary(full_model)$coefficients[4,1]))
+
+summary(full_model)
+
+```
+
+## Step 6: Step Wise AIC 
+
+* We will use the Stepwise AIC funtion in R to do the variable selection for the full model of Logistic Regression. 
+
+* Before doing that we will remove the character variable aircraft type from the data frame as we have already coded it as binary. We will also remove the speed air variable as it has a lot of NULL values and it is highly collinear with speed ground. 
+
+* After applying the step AIC function to the model, is shows that it has lowest AIC of 63.2 when the variables speed_ground, aircraft_num, pitch and height are used. Also, the AIC for the model with variables speed_ground and aircraft_num is 90.66. Since this difference is not large we choose the latter model. Another reason behind that is we have already seen that height and pitch were not significant in the earlier steps. 
+
+```{r}
+## Filtering the character variable aircraft and speed air
+
+flights_1 <- dplyr::select(flights_final, duration, no_pasg, speed_ground, height, pitch, aircraft_num, long_landing)
+
+GLM_long_landing_null <- glm(long_landing ~ 1, family = binomial, data = flights_1)
+GLM_long_landing_full <- glm(long_landing ~ ., family = binomial, data = flights_1)
+
+fit1_GLM <- step(GLM_long_landing_null, scope = list(lower =GLM_long_landing_null,upper = GLM_long_landing_full),    direction = 'forward')
+
+```
+
+## Step 7: Step Wise BIC
+
+* The step function in R can also be used with BIC as our parameter. We will give an extra argument 'k = log(nrow(flights_1))' in the step function. The use of this function for BIC was found through google search. Here is its [link](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/step)
+
+* We observe similar kind of results in stepwise BIC as well. The BIC of 104.84 is observed when the variables speed ground and aircraft numeric are used as predictors. 
+
+* Therefore, the final variables that we will be using as predictors are speed ground and aircraft numeric.
+
+```{r}
+
+fit2_GLM <- step(GLM_long_landing_null, scope = list(lower =GLM_long_landing_null,upper = GLM_long_landing_full),    direction = 'forward', k = log(nrow(flights_1)))
+
+```
+
+## Step 8: Meeting with the FAA agent 
+
+* We will be modelling the variable landing distance using the two predictors - speed ground and aircraft numeric. They are the most important variables as they high association with our response variable. 
+
+* We observe that with a unit increase in speed ground, the odds ratio increases by 1.795 when the variable aircraft numeric is kept constant. 
+
+* We observe that with a unit increase in aircraft numeric (Basically here we are changing the aircraft type) the odds ratio increases by 0.039 when the variable speed_ground is kept constant. 
+
+
+
+```{r}
+presentation_model <- glm(long_landing ~ speed_ground + aircraft_num, family = binomial, data = flights_1)
+
+odds_ratio_presentation <- c(
+exp(summary(presentation_model)$coefficients[2,1]),
+exp(summary(presentation_model)$coefficients[3,1]))
+
+summary(presentation_model)
+
+```
+
+
+# Step 9 : Repeating Steps 1-7 for the binary variable Risky Landing 
+
+## Step 1 (Risk Landing)
+
+* A binary response of risky landing is created based on the varible distance. If the distance is greater than 3000 then variable risky landing will be 1 else it will be 0.
+
+
+## Step 2 (Risky Landing): Histogram showing the distribution of risky_landing 
+
+* It is observed that 62 observations of risky_landing have the value 1 and the rest 770 have the value 0. 
+
+```{r}
+hist(flights_final$risky_landing)
+
+```
+
+## Step 3 (Risky Landing) : Fitting single-factor logistic regression
+
+* The variable Risky Landing is logistically regressed with all the variables one by one. 
+
+* Later the results of all the regression models are tabulated in table 2 that contains the size regression coefficient, direction of coeficient, odds ratio and p values. 
+
+* Using p- values from the table 2, it is observed that the significant predictor variables are speed_air, speed_ground, and aircraft_num. 
+
+```{r}
+
+## Fitting single-factor logistic regression using each variable 
+
+duration_1 <-  glm(risky_landing ~ duration, family = binomial, data = flights_final)
+no_pasg_1 <- glm(risky_landing ~ no_pasg, family = binomial, data = flights_final)
+speed_ground_1 <- glm(risky_landing ~ speed_ground, family = binomial, data = flights_final)
+speed_air_1 <- glm(risky_landing ~ speed_air, family = binomial, data = flights_final)
+height_1 <- glm(risky_landing ~ height, family = binomial, data = flights_final)
+pitch_1 <- glm(risky_landing ~ pitch, family = binomial, data = flights_final)
+aircraft_num_1 <- glm(risky_landing ~ aircraft_num, family = binomial, data = flights_final)
+
+
+##Calculating odds ratio 
+
+odds_ratio_1 <- c(
+exp(summary(duration_1)$coefficients[2,1]),
+exp(summary(no_pasg_1)$coefficients[2,1]),
+exp(summary(speed_ground_1)$coefficients[2,1]),
+exp(summary(speed_air_1)$coefficients[2,1]),
+exp(summary(height_1)$coefficients[2,1]),
+exp(summary(pitch_1)$coefficients[2,1]),
+exp(summary(aircraft_num_1)$coefficients[2,1]))
+
+
+## P values 
+
+p_values_1 <- c(
+summary(duration_1)$coefficients[2,4],
+summary(no_pasg_1)$coefficients[2,4],
+summary(speed_ground_1)$coefficients[2,4],
+summary(speed_air_1)$coefficients[2,4],
+summary(height_1)$coefficients[2,4],
+summary(pitch_1)$coefficients[2,4],
+summary(aircraft_num_1)$coefficients[2,4])
+
+## Regression Coefficients 
+
+regression_coefficients_1 <- c(
+summary(duration_1)$coefficients[2,1],
+summary(no_pasg_1)$coefficients[2,1],
+summary(speed_ground_1)$coefficients[2,1],
+summary(speed_air_1)$coefficients[2,1],
+summary(height_1)$coefficients[2,1],
+summary(pitch_1)$coefficients[2,1],
+summary(aircraft_num_1)$coefficients[2,1])
+
+Table_2 <- data.frame(variable_names, regression_coefficients_1, odds_ratio_1, coef_direction = ifelse(regression_coefficients_1 < 0, "Negative", "Positive") , p_values_1)
+
+Table_2
+
+```
+
+## Step 4 (Risky Landing) : Seeing the association of Risky landing
+
+* The significance of variables is checked using the p values. The models having p-values less than 0.05 are considered as significant. 
+
+* The significant predictor variables observed in table_1 are speed_air, speed_ground, and aircraft_num. 
+
+```{r}
+##Speed_air
+
+plot(jitter(risky_landing,0.1) ~ jitter(speed_air), flights_final, xlab = "Flight Speed Air", ylab = "risky Landing", pch = ".")
+
+```
+
+```{r}
+##Speed_ground
+
+plot(jitter(risky_landing,0.1) ~ jitter(speed_ground), flights_final, xlab = "Flight Speed Ground", ylab = "Risky Landing", pch = ".")
+```
+
+```{r}
+##Aircraft Numeric
+
+plot(jitter(risky_landing,0.1) ~ jitter(pitch), flights_final, xlab = "Aircraft Numeric", ylab = "Risky Landing", pch = ".")
+```
+
+## Step 5 (Risky Landing) : Fitting the data with all variables together 
+
+* It ws observed in step 16 of Project part 1 that the speed air and speed ground were highly collinear. We used speed ground as predictor because the number of NA's in data were high for speed air. Also, speed ground was more significant than speeed air.
+
+* We will now fit a logistic regression using two variables together. The varibles that we will use are speed_ground and aircraft numeric. 
+
+* The full model logistetic regression model tells us that wih a unit increase in Speed Ground the odds ratio will increase by 2.52 when all other variables are kept constant. 
+
+* The full model logistetic regression model tells us that wih a unit increase in Aircraft Numeric the odds ratio will increase by 0.017 when all other variables are kept constant.
+
+
+```{r}
+full_model_1 <-  glm(risky_landing ~ speed_ground + aircraft_num, family = binomial, data = flights_final)
+
+
+## Calculating odds ratio 
+
+odds_ratio_full_model_1 <- c(
+exp(summary(full_model_1)$coefficients[2,1]),
+exp(summary(full_model_1)$coefficients[3,1]))
+
+summary(full_model_1)
+
+```
+
+## Step 6 (Risky Landing) : Step Wise AIC 
+
+* We will use the Stepwise AIC funtion in R to do the variable selection for the full model of Logistic Regression. 
+
+* Before doing that we will remove the character variable aircraft type from the data frame as we have already coded it as binary. We will also remove the speed air variable as it has a lot of NULL values and it is highly collinear with speed ground. 
+
+* After applying the step AIC function to the model, is shows that it has lowest AIC of 45.71 when the variables speed_ground, aicraft_num and no_pasg are selected. The AIC for the model with variables speed_ground and aircraft_num is 46.1. Since this difference is small we will choose speed ground and aicraft_numeric as the predictor variables. Another reason behind that is we have already seen that no_pasg was less significant in the earlier steps. 
+
+```{r}
+
+
+flights_2 <- dplyr::select(flights_final, duration, no_pasg, speed_ground, height, pitch, aircraft_num, risky_landing)
+
+GLM_long_landing_null_1 <- glm(risky_landing ~ 1, family = binomial, data = flights_2)
+GLM_long_landing_full_1 <- glm(risky_landing ~ ., family = binomial, data = flights_2)
+
+fit1_GLM_1 <- step(GLM_long_landing_null_1, scope = list(lower =GLM_long_landing_null_1,upper = GLM_long_landing_full_1),    direction = 'forward')
+
+```
+
+## Step 7 (Risky Landing) : Step Wise BIC
+
+* The step function in R can also be used with BIC as our parameter. We will give an extra argument 'k = log(nrow(flights_1))' in the step function. The use of this function for BIC was found through google search. Here is its [link](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/step)
+
+* We observe similar kind of results in stepwise BIC as well. The minimum BIC of 60.27 is observed when the variable speed_ground and aircraft numerice are used as predictor variables. 
+
+* Therefore, the final variables that we will be using as predictors are speed ground and aircraft_numeric.
+
+```{r}
+
+fit2_GLM_1 <- step(GLM_long_landing_null_1, scope = list(lower =GLM_long_landing_null_1,upper = GLM_long_landing_full_1),    direction = 'forward', k = log(nrow(flights_1)))
+
+```
+
+# Step 10 : Meeting the FAA agent 
+
+* We will be modelling the variable risky landing distance using the predictors - speed ground and aircraft numeirc. They are the most important variable as they have high association with our response variable. 
+
+* We observe that with a unit increase in speed ground, the odds ratio increases by 2.52 when other variables are kept constant.
+
+* We observe that with a unit increase in aircraft_num, the odds ratio increases by 0.0179 when other variables are kept constant.
+
+```{r}
+presentation_model_1 <- glm(risky_landing ~ speed_ground  + aircraft_num, family = binomial, data = flights_2)
+
+odds_ratio_presentation_1 <- c(
+exp(summary(presentation_model_1)$coefficients[2,1]),
+exp(summary(presentation_model_1)$coefficients[3,1]))
+
+summary(presentation_model_1)
+
+```
+
+## Step 11 : Comparison of Two Models
+
+* For the prediction of probability of long landing we have used the variables speed of ground and the aircraft type. We observe that with a unit increase in speed ground, the odds ratio increases by 1.79 when the variable aircraft numeric is kept constant. We observe that with a unit increase in aircraft numeric (Basically here we are changing the aircraft type) the odds ratio increases by 0.039 when the variable speed_ground is kept constant.
+
+* For the prediction of probability of long landing we will be using the variables speed of ground and aircraft numeric. We observe that with a unit increase in speed ground, the odds ratio increases by 2.52 when aircraft numeric is kept constant. While there is an increase in odds ratio by 0.0179 when aircraft_num is icreased by 1 unit keeping speed_ground constant.  
+
+* Speed Air could have been a good predictor for both the binary variables as it also had a great assiciation with them. Owing to high number of null values we are unable to use that in our models. 
+
+## Step 12 : ROC Curves 
+
+* After plotting the ROC Curves for our final models we observe that the model built for risky landing is better than the model built for long landing. The area under the curve for the former model is greater than the latter one. 
+
+```{r}
+## Long Landing Model 
+
+
+thresh <- seq(0.01, 0.5, 0.01)
+
+pred_prob <- predict(presentation_model, type = "response")
+pred_prob_1 <- predict(presentation_model_1, type = "response")
+
+
+## Data Frames for Graphs
+
+flights_1a <- data.frame(flights_1, pred_prob)
+
+sensitivity <- specificity <- rep(NA, length(thresh))
+for (j in seq(along = thresh)){
+  pp <- ifelse(flights_1a$pred_prob < thresh[j], "no","yes")
+  xx <- xtabs(~long_landing + pp, flights_1a)
+  specificity[j] <- xx[1,1]/(xx[1,1] + xx[1,2])
+  sensitivity[j] <- xx[2,2]/(xx[2,1] + xx[2,2])
+}
+
+flights_2a <- data.frame(flights_2, pred_prob_1)
+
+sensitivity_1 <- specificity_1 <- rep(NA, length(thresh))
+for (j in seq(along = thresh)){
+  pp_1 <- ifelse(flights_2a$pred_prob_1 < thresh[j], "no","yes")
+  xx_1 <- xtabs(~risky_landing + pp_1, flights_2a)
+  specificity_1[j] <- xx_1[1,1]/(xx_1[1,1] + xx_1[1,2])
+  sensitivity_1[j] <- xx_1[2,2]/(xx_1[2,1] + xx_1[2,2])
+}
+
+
+plot(1-specificity, sensitivity, type = "l"); abline(0,1, lty = 2)
+lines(1-specificity_1,sensitivity_1,col="green")
+
+
+```
+
+## Step 13 : Predicting Probability for given observation 
+
+* We will now predict the probabilty and confidence intervals for the given observation and  for both the variables long_landing and risky_landing. 
+
+* Since the aircraft type in the given observation is 'Boeing', the aircraft numeric will be equal to 1. 
+
+* The Probability of long landing for this observation predicted by the model is 99.99%. The confidence interval is in between 0.9998 and 1.0001.
+
+* The Probability of long landing for this observation predicted by the model is 99.97%. The confidence interval is in between 0.9989 and 1.0007
+
+```{r}
+
+
+new_obs <- data.frame(speed_ground = 115, aircraft_num = 0)
+
+## Prediction of Probability of Long Landing 
+predict(presentation_model, newdata = new_obs, type = "response", se = T)
+
+## Confidence Interval of Long Landing
+
+round(c(0.9999434 - 1.96*8.630534e-05, 0.9999434 + 1.96*8.630534e-05 ), 4)
+
+## Prediction of probability of Risky Landing 
+
+predict(presentation_model_1, newdata = new_obs, type = "response", se = T)
+
+## Confidence Interval of Long Landing
+
+round(c(0.999789  - 1.96*0.0004408113, 0.999789  + 1.96*0.0004408113), 4)
+
+```
+
+## Step 14 : Fitting the Probit and Hazard model for the variable Risky Landing 
+
+* We will be using the same variables i.e. speed_ground and aircraft numeric as predictor variables which were found as important in steps 9 and 10. 
+
+* After fitting the models, we see that the size coefficients of the earlier model is almost twice when compared with probit and complementary log log model. 
+
+* The sizes of coeffients is almost the same for probit model and the complementary log log model.
+
+```{r}
+## Fitting a Probit Model 
+
+presentation_model_1_probit <- glm(risky_landing ~ speed_ground + aircraft_num, family = binomial(link = probit), flights_2)
+
+## Fitting a C.Log Log Model 
+
+presentation_model_1_cloglog <- glm(risky_landing ~ speed_ground + aircraft_num, family = binomial(link = cloglog), flights_2)
+
+
+## Comparing the models of risky landing 
+
+round(coef(presentation_model_1), 3)
+round(coef(presentation_model_1_probit), 3)
+round(coef(presentation_model_1_cloglog), 3)
+
+```
+
+## Step 15 : Comparing the ROC curves for all the three models 
+
+* After comparing the graphs of all three models we observe that the highest AUC is for the complementary log log model, then the probit model followed by the general linear model. 
+
+* The green graph represents probit model, the red represents the complementary log log model. 
+
+```{r}
+
+pred_prob_1_probit <- predict(presentation_model_1_probit, type = "response")
+pred_prob_1_cloglog <- predict(presentation_model_1_cloglog, type = "response")
+
+
+flights_3a <- data.frame(flights_2, pred_prob_1, pred_prob_1_probit,pred_prob_1_cloglog)
+
+sensitivity_1_probit <- specificity_1_probit <- rep(NA, length(thresh))
+for (j in seq(along = thresh)){
+  pp_1_probit <- ifelse(flights_3a$pred_prob_1_probit < thresh[j], "no","yes")
+  xx_1_probit <- xtabs(~risky_landing + pp_1_probit, flights_3a)
+  specificity_1_probit[j] <- xx_1_probit[1,1]/(xx_1_probit[1,1] + xx_1_probit[1,2])
+  sensitivity_1_probit[j] <- xx_1_probit[2,2]/(xx_1_probit[2,1] + xx_1_probit[2,2])
+}
+
+sensitivity_1_cloglog <- specificity_1_cloglog <- rep(NA, length(thresh))
+for (j in seq(along = thresh)){
+  pp_1_cloglog <- ifelse(flights_3a$pred_prob_1_cloglog < thresh[j], "no","yes")
+  xx_1_cloglog <- xtabs(~risky_landing + pp_1_cloglog, flights_3a)
+  specificity_1_cloglog[j] <- xx_1_cloglog[1,1]/(xx_1_cloglog[1,1] + xx_1_cloglog[1,2])
+  sensitivity_1_cloglog[j] <- xx_1_cloglog[2,2]/(xx_1_cloglog[2,1] + xx_1_cloglog[2,2])
+}
+
+
+plot(1-specificity_1, sensitivity_1, type = "l"); abline(0,1, lty = 2)
+lines(1-specificity_1_probit,sensitivity_1_probit,col="green")
+lines(1-specificity_1_cloglog,sensitivity_1_cloglog,col="red")
+
+
+```
+
+## Step 16: Top 5 Risky Landings
+
+* We will be using the 'top_n' function in R to do this. Tis was figured out by google search. Here is its [link](https://dplyr.tidyverse.org/reference/top_n.html)
+
+* All the 3 models point towards same set of 5 flights when sorted by the higest probabilities.
+
+
+```{r}
+
+## Top 5 Flights - General Linear model
+top_n(flights_3a, 5, pred_prob_1)
+
+## Top 5 Flights - Probit model
+top_n(flights_3a, 5, pred_prob_1_probit)
+
+## Top 5 Flights - complementary log-log model
+top_n(flights_3a, 5, pred_prob_1_cloglog)
+
+
+```
+
+## Step 17: Prediction of probability and its confidence intervals for the observation in step 13 
+
+* The Probability of risky landing for the observation in step 13 predicted by the probit model is 99.99%. The confidence interval is in between 0.9998 and 1.0001.
+
+* The Probability of long landing for this observation predicted by the model is 99.97%. The confidence interval is in between 0.99999 and 1.00001.
+
+* The Probability of long landing for this observation predicted by the model is 100%. The confidence interval is in between 0.99999 and 1.00005.
+
+```{r}
+
+## Prediction of probability of Risky Landing using probit model 
+
+predict(presentation_model_1_probit, newdata = new_obs, type = "response", se = T)
+
+## Confidence Interval of Risky Landing using probit model 
+
+round(c(0.9999994   - 1.96*3.153557e-06, 0.9999994   + 1.96*3.153557e-06), 5)
+
+## Prediction of probability of Risky Landing using Complementary Log Log model 
+
+predict(presentation_model_1_cloglog, newdata = new_obs, type = "response", se = T)
+
+## Confidence Interval of Risky Landing using Complementary Log Log model 
+
+round(c(1   - 1.96*2.605523e-16, 1   + 1.96*2.605523e-16), 6)
+
+```
+
+
+
+
+
+
+
